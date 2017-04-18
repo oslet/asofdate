@@ -11,13 +11,9 @@ import (
 	"github.com/hzwy23/asofdate/utils/token/hjwt"
 	"github.com/hzwy23/dbobj"
 	"github.com/hzwy23/asofdate/utils/i18n"
+	"net/http"
 )
 
-const (
-	error_querydb  string = "can not found user info in system."
-	error_maxerror string = "user was forbided, you have continued type password error 6 times."
-	error_password string = "user's password error.please check your password"
-)
 
 type mSysUserSec struct {
 	User_id                 string        `json:"user_id"`
@@ -39,16 +35,16 @@ func CheckPasswd(user_id, user_passwd string) (bool, int, int64, string) {
 	var sec mSysUserSec
 	err := dbobj.QueryRow(sys_rdbms_hrpc_005, user_id).Scan(&sec.User_id, &sec.User_passwd, &sec.User_status, &sec.User_continue_error_cnt)
 	if err != nil {
-		return false, 402, 0, error_querydb
+		return false, 402, 0, "error_querydb"
 	}
 
 	if sec.User_status.Int64 != 0 {
-		return false, 406, sec.User_status.Int64, error_maxerror
+		return false, 406, sec.User_status.Int64, "error_maxerror"
 	}
 
 	if sec.User_continue_error_cnt.Int64 > 6 {
 		forbidUsers(user_id)
-		return false, 403, sec.User_continue_error_cnt.Int64, error_maxerror
+		return false, 403, sec.User_continue_error_cnt.Int64, "error_maxerror"
 	}
 
 	if sec.User_id == user_id && sec.User_passwd == user_passwd {
@@ -56,7 +52,7 @@ func CheckPasswd(user_id, user_passwd string) (bool, int, int64, string) {
 		return true, 200, 0, ""
 	} else {
 		updateContinueErrorCnt(sec.User_continue_error_cnt.Int64+1, user_id)
-		return false, 405, sec.User_continue_error_cnt.Int64 + 1, error_password
+		return false, 405, sec.User_continue_error_cnt.Int64 + 1, "error_password"
 	}
 }
 
@@ -99,7 +95,7 @@ func BasicAuth(ctx *context.Context) bool {
 	jclaim, err := hjwt.ParseJwt(cookie.Value)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Get("as_of_date_no_auth"))
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Get(ctx.Request,"as_of_date_no_auth"))
 		return false
 	}
 	if jclaim.User_id == "admin" {
@@ -108,11 +104,11 @@ func BasicAuth(ctx *context.Context) bool {
 	cnt := 0
 	err = dbobj.QueryRow(sys_rdbms_hrpc_006, jclaim.User_id, ctx.Request.URL.Path).Scan(&cnt)
 	if err != nil {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Get("as_of_date_no_auth"))
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Get(ctx.Request,"as_of_date_no_auth"))
 		return false
 	}
 	if cnt == 0 {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Get("as_of_date_no_auth"))
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Get(ctx.Request,"as_of_date_no_auth"))
 		return false
 	}
 	return true
@@ -121,9 +117,9 @@ func BasicAuth(ctx *context.Context) bool {
 // 返回值是-1 表示没有读写权限
 // 返回值是1 表示有读取权限，没有写入权限
 // 返回值是2 表示有读写权限
-func DomainAuth(ctx *context.Context, domain_id string) int {
+func CheckDomainAuthLevel(req *http.Request, domain_id string) int {
 	level := -1
-	cookie, _ := ctx.Request.Cookie("Authorization")
+	cookie, _ := req.Cookie("Authorization")
 	jclaim, err := hjwt.ParseJwt(cookie.Value)
 	if err != nil {
 		logs.Error(err)
@@ -144,8 +140,8 @@ func DomainAuth(ctx *context.Context, domain_id string) int {
 // 第一个参数是上下文 context
 // 第二个参数是用户想要访问的域
 // 第三个参数是用户想要的权限，分两种情况，r 表示只读， w 表示读写
-func CheckDomain(ctx *context.Context, domain_id string, pattern string) bool {
-	level := DomainAuth(ctx, domain_id)
+func DomainAuth(req *http.Request, domain_id string, pattern string) bool {
+	level := CheckDomainAuthLevel(req, domain_id)
 	switch pattern {
 	case "r":
 		if level != -1 {

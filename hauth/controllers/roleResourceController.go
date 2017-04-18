@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"github.com/asaskevich/govalidator"
 	"github.com/hzwy23/asofdate/hauth/hrpc"
+	"github.com/hzwy23/asofdate/utils/i18n"
 )
 
 type roleAndResourceController struct {
@@ -24,10 +25,9 @@ var RoleAndResourceCtl = &roleAndResourceController{
 
 // swagger:operation GET /v1/auth/role/resource/details StaticFiles domainShareControll
 //
-// Returns all domain information
+// 角色菜单资源配置管理页面
 //
-// get special domain share information
-//
+// 如果用户被授权,将会返回指定角色资源管理页面.
 // ---
 // produces:
 // - application/json
@@ -43,7 +43,7 @@ var RoleAndResourceCtl = &roleAndResourceController{
 //   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this roleAndResourceController) ResourcePage(ctx *context.Context) {
 	defer hret.HttpPanic()
 	ctx.Request.ParseForm()
@@ -56,7 +56,7 @@ func (this roleAndResourceController) ResourcePage(ctx *context.Context) {
 
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, "查询角色资源信息失败")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_role_resource_query"))
 		return
 	}
 	file, _ := template.ParseFiles("./views/hauth/res_role_rel_page.tpl")
@@ -64,12 +64,11 @@ func (this roleAndResourceController) ResourcePage(ctx *context.Context) {
 	file.Execute(ctx.ResponseWriter, rst)
 }
 
-// 查询指定角色的资源信息
 // swagger:operation GET /v1/auth/role/resource/get roleAndResourceController roleAndResourceController
 //
-// Returns all domain information
+// 查询角色指定的拥有的菜单资源和没有拥有的菜单资源
 //
-// get special domain share information
+// type_id = 0 表示查询角色拥有的菜单资源, type_id = 1 表示查询角色没有获取的菜单资源
 //
 // ---
 // produces:
@@ -86,7 +85,7 @@ func (this roleAndResourceController) ResourcePage(ctx *context.Context) {
 //   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this roleAndResourceController) GetResource(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	if !hrpc.BasicAuth(ctx) {
@@ -101,7 +100,7 @@ func (this roleAndResourceController) GetResource(ctx *context.Context) {
 		rst, err := this.resRoleModel.Get(role_id)
 		if err != nil {
 			logs.Error(err)
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, "查询角色对应的资源信息失败")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_role_get_resource"))
 			return
 		}
 		hret.WriteJson(ctx.ResponseWriter, rst)
@@ -110,19 +109,20 @@ func (this roleAndResourceController) GetResource(ctx *context.Context) {
 		rst, err := this.resRoleModel.UnGetted(role_id)
 		if err != nil {
 			logs.Error(err)
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, "查询角色对应的资源信息失败")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_role_unget_resource"))
 			return
 		}
 		hret.WriteJson(ctx.ResponseWriter, rst)
 	}
 }
 
-// 授权与撤权操作
 // swagger:operation POST /v1/auth/role/resource/rights roleAndResourceController roleAndResourceController
 //
-// Returns all domain information
+// 授予角色菜单资源或删除角色菜单资源
 //
-// get special domain share information
+// type_id = 0 表示移除某个指定角色的菜单资源.
+//
+// type_id = 1 表示给某个指定角色增加菜单资源.
 //
 // ---
 // produces:
@@ -139,7 +139,7 @@ func (this roleAndResourceController) GetResource(ctx *context.Context) {
 //   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this roleAndResourceController) HandleResource(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	if !hrpc.BasicAuth(ctx) {
@@ -150,12 +150,12 @@ func (this roleAndResourceController) HandleResource(ctx *context.Context) {
 	type_id := ctx.Request.FormValue("type_id")
 
 	if !govalidator.IsWord(res_id){
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,"资源编码不正确.")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,i18n.Get(ctx.Request,"error_resource_res_id"))
 		return
 	}
 
 	if !govalidator.IsWord(role_id){
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,"角色编码不正确.")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,i18n.Get(ctx.Request,"error_role_id_format"))
 		return
 	}
 
@@ -164,10 +164,10 @@ func (this roleAndResourceController) HandleResource(ctx *context.Context) {
 		err := this.resRoleModel.Delete(role_id, res_id)
 		if err != nil {
 			logs.Error(err)
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, "删除角色对应的资源信息失败")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_role_delete_failed"))
 			return
 		} else {
-			hret.WriteHttpOkMsgs(ctx.ResponseWriter, "撤销资源权限成功")
+			hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Success(ctx.Request))
 			return
 		}
 	} else {
@@ -175,10 +175,10 @@ func (this roleAndResourceController) HandleResource(ctx *context.Context) {
 		err := this.resRoleModel.Post(role_id, res_id)
 		if err != nil {
 			logs.Error(err)
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, "删除角色对应的资源信息失败")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_role_delete_failed"))
 			return
 		} else {
-			hret.WriteHttpOkMsgs(ctx.ResponseWriter, "撤销资源权限成功")
+			hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Success(ctx.Request))
 			return
 		}
 	}

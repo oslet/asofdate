@@ -3,7 +3,6 @@ package controllers
 import (
 	"encoding/json"
 	"github.com/astaxie/beego/context"
-	"net/http"
 	"strconv"
 
 	"github.com/hzwy23/asofdate/hauth/hcache"
@@ -32,12 +31,11 @@ var OrgCtl = &orgController{
 	upload:make(chan int,1),
 }
 
-
 // swagger:operation GET /v1/auth/resource/org/page StaticFiles orgController
 //
-// Returns all domain information
+// 机构信息配置管理页面
 //
-// get special domain share information
+// 首先系统会检查用户的连接信息,如果用户被授权访问这个页面,将会返回机构配置管理页面内容,否则返回响应的错误住状态.
 //
 // ---
 // produces:
@@ -47,7 +45,7 @@ var OrgCtl = &orgController{
 // - text/html
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (orgController) Page(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	if !hrpc.BasicAuth(ctx) {
@@ -55,18 +53,17 @@ func (orgController) Page(ctx *context.Context) {
 	}
 	rst, err := hcache.GetStaticFile("AsofdateOrgPage")
 	if err != nil {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 404, "页面不存在")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 404, i18n.PageNotFound(ctx.Request))
 		return
 	}
 	ctx.ResponseWriter.Write(rst)
 }
 
-// 获取机构信息
 // swagger:operation GET /v1/auth/resource/org/get orgController orgController
 //
-// Returns all domain information
+// 查询机构信息
 //
-// get special domain share information
+// API将会返回指定域中的机构信息,用户在请求这个API时,需要传入domain_id这个字段值
 //
 // ---
 // produces:
@@ -83,7 +80,7 @@ func (orgController) Page(ctx *context.Context) {
 //   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this orgController) Get(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	if !hrpc.BasicAuth(ctx) {
@@ -97,31 +94,31 @@ func (this orgController) Get(ctx *context.Context) {
 		jclaim, err := hjwt.ParseJwt(cookie.Value)
 		if err != nil {
 			logs.Error(err)
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, "No Auth")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect(ctx.Request))
 			return
 		}
 		domain_id = jclaim.Domain_id
 	}
 
-	if !hrpc.CheckDomain(ctx, domain_id, "r") {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "没有权限访问这个域中的信息。")
+	if !hrpc.DomainAuth(ctx.Request, domain_id, "r") {
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"as_of_date_domain_permission_denied"))
 		return
 	}
 
 	rst, err := this.models.Get(domain_id)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 417, "操作数据库失败")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 417, i18n.Get(ctx.Request,"error_query_org_info"))
 		return
 	}
 	hret.WriteJson(ctx.ResponseWriter, rst)
 }
 
-// swagger:operation DELETE /v1/auth/resource/org/delete orgController orgController
+// swagger:operation POST /v1/auth/resource/org/delete orgController orgController
 //
-// Returns all domain information
+// 删除机构信息
 //
-// get special domain share information
+// 首先系统会校验用户的权限,如果用户拥有删除机构的权限,系统将会根据用户请求的参数,删除响应的机构信息.
 //
 // ---
 // produces:
@@ -136,9 +133,15 @@ func (this orgController) Get(ctx *context.Context) {
 //   required: true
 //   type: string
 //   format:
+// - name: JSON
+//   in: query
+//   description: json format
+//   required: true
+//   type: string
+//   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this orgController) Delete(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	if !hrpc.BasicAuth(ctx) {
@@ -151,7 +154,7 @@ func (this orgController) Delete(ctx *context.Context) {
 	err := json.Unmarshal([]byte(orgList), &mjs)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, http.StatusExpectationFailed, "delete org info failed.", err)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_delete_org_info"), err)
 		return
 	}
 
@@ -159,14 +162,14 @@ func (this orgController) Delete(ctx *context.Context) {
 		cok, _ := ctx.Request.Cookie("Authorization")
 		jclaim, err := hjwt.ParseJwt(cok.Value)
 		if err != nil {
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect())
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect(ctx.Request))
 			return
 		}
 		domain_id = jclaim.Domain_id
 	}
 
-	if !hrpc.CheckDomain(ctx,domain_id,"w"){
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, "获取机构对应的域信息错误.")
+	if !hrpc.DomainAuth(ctx.Request,domain_id,"w"){
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Get(ctx.Request,"as_of_date_domain_permission_denied_modify"))
 		return
 	}
 
@@ -178,14 +181,14 @@ func (this orgController) Delete(ctx *context.Context) {
 		return
 	}
 
-	hret.WriteHttpOkMsgs(ctx.ResponseWriter, "delete org info successfully.")
+	hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Success(ctx.Request))
 }
 
 // swagger:operation PUT /v1/auth/resource/org/update orgController orgController
 //
-// Returns all domain information
+// 更新机构信息
 //
-// get special domain share information
+// 系统将会更具用户传入的参数,修改指定机构信息.
 //
 // ---
 // produces:
@@ -202,7 +205,7 @@ func (this orgController) Delete(ctx *context.Context) {
 //   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this orgController) Update(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	if !hrpc.BasicAuth(ctx) {
@@ -213,7 +216,7 @@ func (this orgController) Update(ctx *context.Context) {
 	jclaim, err := hjwt.ParseJwt(cookie.Value)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, "No Auth")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect(ctx.Request))
 		return
 	}
 	org_unit_id := ctx.Request.FormValue("Id")
@@ -224,46 +227,46 @@ func (this orgController) Update(ctx *context.Context) {
 	did, err := hrpc.CheckDomainByOrgId(org_unit_id)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "您没有权限更新这个域中的机构信息")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_get_domain_by_orgid"))
 		return
 	}
 
-	if !hrpc.CheckDomain(ctx, did, "w") {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "您没有权限更新这个域中的机构信息")
+	if !hrpc.DomainAuth(ctx.Request, did, "w") {
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"as_of_date_domain_permission_denied_modify"))
 		return
 	}
 
 	// 校验输入信息
 	if govalidator.IsEmpty(org_unit_desc) {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "机构描述信息不能为空.")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_org_id_desc_empty"))
 		return
 	}
 
 	if !govalidator.IsIn(org_status_id, "0", "1") {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "请选择机构状态.")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_org_status_empty"))
 		return
 	}
 
 	if !govalidator.IsWord(org_unit_id) {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "机构编码不正确")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_org_id_format"))
 		return
 	}
 
 	if !govalidator.IsWord(up_org_id) {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "请选择上级机构.")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_org_up_id_empty"))
 		return
 	}
 
 	check, err := this.models.GetSubOrgInfo(did, org_unit_id)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, "操作数据库失败。")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_org_sub_query"))
 		return
 	}
 
 	for _, val := range check {
 		if val.Org_unit_id == up_org_id {
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, "上级机构号不能是自己的下属机构")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_org_up_id_complex"))
 			return
 		}
 	}
@@ -271,18 +274,18 @@ func (this orgController) Update(ctx *context.Context) {
 	err = this.models.Update(org_unit_desc, up_org_id, org_status_id, jclaim.User_id, org_unit_id, did)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "修改机构信息失败", err)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_org_modify"), err)
 		return
 	}
-	hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Get("success"))
+	hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Get(ctx.Request,"success"))
 }
 
 
 // swagger:operation POST /v1/auth/resource/org/post orgController orgController
 //
-// Returns all domain information
+// 新增机构信息
 //
-// get special domain share information
+// 想指定域中新增机构信息
 //
 // ---
 // produces:
@@ -297,19 +300,38 @@ func (this orgController) Update(ctx *context.Context) {
 //   required: true
 //   type: string
 //   format:
+// - name: Org_unit_id
+//   in: query
+//   description: org code number
+//   required: true
+//   type: string
+//   format:
+// - name: Org_unit_desc
+//   in: query
+//   description: org desc
+//   required: true
+//   type: string
+//   format:
+// - name: Up_org_id
+//   in: query
+//   description: up org id
+//   required: true
+//   type: string
+//   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this orgController) Post(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	if !hrpc.BasicAuth(ctx) {
 		return
 	}
+
 	cookie, _ := ctx.Request.Cookie("Authorization")
 	jclaim, err := hjwt.ParseJwt(cookie.Value)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 310, "No Auth")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect(ctx.Request))
 		return
 	}
 
@@ -318,8 +340,8 @@ func (this orgController) Post(ctx *context.Context) {
 	up_org_id := ctx.Request.FormValue("Up_org_id")
 	domain_id := ctx.Request.FormValue("Domain_id")
 
-	if !hrpc.CheckDomain(ctx, domain_id, "w") {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "您没有权限在这个中新增机构信息")
+	if !hrpc.DomainAuth(ctx.Request, domain_id, "w") {
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"as_of_date_domain_permission_denied_modify"))
 		return
 	}
 
@@ -327,27 +349,27 @@ func (this orgController) Post(ctx *context.Context) {
 	org_status_id := "0"
 
 	if !govalidator.IsWord(org_unit_id) {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, "机构编码必须有1,30位字母或数字组成")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_org_id_format"))
 		return
 	}
 
 	if govalidator.IsEmpty(org_unit_desc) {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, "机构名称不能为空，请输入机构名称")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_org_id_desc_empty"))
 		return
 	}
 
 	if !govalidator.IsWord(domain_id) {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, "请选择所属域，所属域不能为空")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"as_of_date_domain_id_check"))
 		return
 	}
 
 	if !govalidator.IsWord(up_org_id) {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, "请选择上级机构号，上级机构号不能为空")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_org_up_id_empty"))
 		return
 	}
 
 	if !govalidator.IsIn(org_status_id, "0", "1") {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "机构状态不正确.")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_org_status_empty"))
 		return
 	}
 
@@ -355,10 +377,10 @@ func (this orgController) Post(ctx *context.Context) {
 		domain_id, jclaim.User_id, jclaim.User_id, id)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "新增机构信息失败.", err)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_org_add"), err)
 		return
 	}
-	hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Get("success"))
+	hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Get(ctx.Request,"success"))
 }
 
 func (orgController) getOrgTops(node []models.SysOrgInfo) []models.SysOrgInfo {
@@ -391,9 +413,9 @@ func (this orgController) orgTree(node []models.SysOrgInfo, id string, d int, re
 
 // swagger:operation GET /v1/auth/relation/domain/org orgController orgController
 //
-// Returns all domain information
+// 返回某个机构的所有下级机构信息
 //
-// get special domain share information
+// 根据客户端请求时指定的机构id,获取这个id所有的下属机构信息
 //
 // ---
 // produces:
@@ -408,9 +430,15 @@ func (this orgController) orgTree(node []models.SysOrgInfo, id string, d int, re
 //   required: true
 //   type: string
 //   format:
+// - name: org_unit_id
+//   in: query
+//   description: org code number
+//   required: true
+//   type: string
+//   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this orgController) GetSubOrgInfo(ctx *context.Context) {
 
 	ctx.Request.ParseForm()
@@ -420,14 +448,14 @@ func (this orgController) GetSubOrgInfo(ctx *context.Context) {
 	did, err := hrpc.CheckDomainByOrgId(org_unit_id)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "您没有权限更新这个域中的机构信息")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_get_domain_by_orgid"))
 		return
 	}
 
 	rst, err := this.models.GetSubOrgInfo(did, org_unit_id)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, "操作数据库失败")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_org_sub_query"))
 		return
 	}
 
@@ -436,9 +464,9 @@ func (this orgController) GetSubOrgInfo(ctx *context.Context) {
 
 // swagger:operation GET /v1/auth/resource/org/download orgController orgController
 //
-// Returns all domain information
+// 下载机构信息
 //
-// get special domain share information
+// 下载某个指定域的所有机构信息. 只能下载用户有权限访问的域中的机构
 //
 // ---
 // produces:
@@ -455,7 +483,7 @@ func (this orgController) GetSubOrgInfo(ctx *context.Context) {
 //   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this orgController) Download(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	if !hrpc.BasicAuth(ctx) {
@@ -470,33 +498,33 @@ func (this orgController) Download(ctx *context.Context) {
 		jclaim, err := hjwt.ParseJwt(cookie.Value)
 		if err != nil {
 			logs.Error(err)
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 310, "No Auth")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403,i18n.Disconnect(ctx.Request))
 			return
 		}
 		domain_id = jclaim.Domain_id
 	}
 
-	if !hrpc.CheckDomain(ctx, domain_id, "r") {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, "您没有权限导出这个域中的机构信息.")
+	if !hrpc.DomainAuth(ctx.Request, domain_id, "r") {
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Get(ctx.Request,"as_of_date_domain_permission_denied"))
 		return
 	}
 
 	rst, err := this.models.Get(domain_id)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 417, "操作数据库失败")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 417, i18n.Get(ctx.Request,"error_query_org_info"))
 		return
 	}
 
 	var sheet *xlsx.Sheet
 	HOME := os.Getenv("HBIGDATA_HOME")
-	file, err := xlsx.OpenFile(filepath.Join(HOME, "upload/template/hauthOrgExportTemplate.xlsx"))
+	file, err := xlsx.OpenFile(filepath.Join(HOME, "upload","template","hauthOrgExportTemplate.xlsx"))
 	if err != nil {
 		file = xlsx.NewFile()
 		sheet, err = file.AddSheet("机构信息")
 		if err != nil {
 			logs.Error(err)
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "没有找到sheet也名称为'机构信息'的页面")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_org_sheet"))
 			return
 		}
 
@@ -526,7 +554,7 @@ func (this orgController) Download(ctx *context.Context) {
 	} else {
 		sheet = file.Sheet["机构信息"]
 		if sheet == nil {
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "没有找到sheet也名称为'机构信息'的页面")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_org_sheet"))
 			return
 		}
 	}
@@ -579,9 +607,11 @@ func (this orgController) Download(ctx *context.Context) {
 
 // swagger:operation GET /v1/auth/resource/org/upload orgController orgController
 //
-// Returns all domain information
+// 上传机构信息
 //
-// get special domain share information
+// 根据客户端导入的excel格式的数据,将机构信息写入到数据库中.
+//
+// 这个上传过程是:增量删除, 一旦出现重复的机构,将会中断上传过程,且数据库会立刻回滚.
 //
 // ---
 // produces:
@@ -598,10 +628,10 @@ func (this orgController) Download(ctx *context.Context) {
 //   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this orgController)Upload(ctx *context.Context){
 	if len(this.upload) != 0 {
-		hret.WriteHttpOkMsgs(ctx.ResponseWriter, "已经有正在导入的任务,请稍等")
+		hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Get(ctx.Request,"error_org_upload_wait"))
 		return
 	}
 
@@ -610,7 +640,7 @@ func (this orgController)Upload(ctx *context.Context){
 	jclaim, err := hjwt.ParseJwt(cookie.Value)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, "No Auth")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect(ctx.Request))
 		return
 	}
 
@@ -624,14 +654,14 @@ func (this orgController)Upload(ctx *context.Context){
 	fd, _, err := ctx.Request.FormFile("file")
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "读取上传文件失败")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_org_read_upload_file"))
 		return
 	}
 
 	result,err := ioutil.ReadAll(fd)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,"读取文件信息失败.")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,i18n.Get(ctx.Request,"error_org_read_upload_file"))
 		return
 	}
 
@@ -641,7 +671,7 @@ func (this orgController)Upload(ctx *context.Context){
 	sheet, ok := file.Sheet["机构信息"]
 	if !ok {
 		logs.Error("没有找到'机构信息'这个sheet页")
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "没有找到'机构信息'这个sheet页")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_org_sheet"))
 		return
 	}
 	var data []models.SysOrgInfo
@@ -655,8 +685,8 @@ func (this orgController)Upload(ctx *context.Context){
 			one.Up_org_id = utils.JoinCode(one.Domain_id,val.Cells[2].Value)
 			one.Create_user = jclaim.User_id
 
-			if !hrpc.CheckDomain(ctx, one.Domain_id, "w") {
-				hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, "您没有权限在"+val.Cells[6].Value+"域中导入机构信息")
+			if !hrpc.DomainAuth(ctx.Request, one.Domain_id, "w") {
+				hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Get(ctx.Request,"as_of_date_domain_permission_denied_modify"))
 				return
 			}
 			data = append(data,one)
@@ -668,7 +698,7 @@ func (this orgController)Upload(ctx *context.Context){
 		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,err.Error())
 		return
 	}
-	hret.WriteHttpOkMsgs(ctx.ResponseWriter,i18n.Success())
+	hret.WriteHttpOkMsgs(ctx.ResponseWriter,i18n.Success(ctx.Request))
 }
 
 func init() {

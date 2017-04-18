@@ -1,8 +1,6 @@
 package controllers
 
 import (
-	"net/http"
-
 	"github.com/astaxie/beego/context"
 	"github.com/hzwy23/asofdate/hauth/models"
 	"github.com/hzwy23/asofdate/utils/hret"
@@ -52,20 +50,18 @@ func (this *userRolesController) Page(ctx *context.Context) {
 	// According to the key get the value from the groupCache system
 	rst, err := hcache.GetStaticFile("AuthorityPage")
 	if err != nil {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 404, i18n.Get("as_of_date_page_not_exist"))
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 404, i18n.Get(ctx.Request,"as_of_date_page_not_exist"))
 		return
 	}
 
 	ctx.ResponseWriter.Write(rst)
 }
 
-// 通过user_id用户账号，来查询这个用户拥有的角色信息
-// @(http request params)  user_id
 // swagger:operation GET /v1/auth/user/roles/get userRolesController userRolesController
 //
-// Returns all domain information
+// 通过user_id用户账号，来查询这个用户拥有的角色信息
 //
-// get special domain share information
+// 查询角色信息
 //
 // ---
 // produces:
@@ -82,7 +78,7 @@ func (this *userRolesController) Page(ctx *context.Context) {
 //   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this userRolesController) GetRolesByUserId(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	user_id := ctx.Request.FormValue("user_id")
@@ -90,19 +86,17 @@ func (this userRolesController) GetRolesByUserId(ctx *context.Context) {
 	rst, err := this.models.GetRolesByUser(user_id)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get("error_user_role_query"), err)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_user_role_query"), err)
 		return
 	}
 	hret.WriteJson(ctx.ResponseWriter, rst)
 }
 
-// 通过user_id账号，查询这个用户能够访问，但是又没有获取到的角色信息
-// @(http request param) user_id
 // swagger:operation GET /v1/auth/user/roles/other userRolesController userRolesController
 //
-// Returns all domain information
+// 通过user_id账号，查询这个用户能够访问，但是又没有获取到的角色信息
 //
-// get special domain share information
+// 查询用户没有获取的角色
 //
 // ---
 // produces:
@@ -125,27 +119,24 @@ func (this userRolesController) GetOtherRoles(ctx *context.Context) {
 	user_id := ctx.Request.FormValue("user_id")
 
 	if user_id == "" {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get("error_user_role_no_user"))
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_user_role_no_user"))
 		return
 	}
 
 	rst, err := this.models.GetOtherRoles(user_id)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get("error_user_role_un_auth"), err)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_user_role_un_auth"), err)
 		return
 	}
 	hret.WriteJson(ctx.ResponseWriter, rst)
 }
 
-// 给指定的用户授予角色
-// @(http request param) JSON
-// 这个函数接收一个指定的json字符串。
 // swagger:operation POST /v1/auth/user/roles/auth userRolesController userRolesController
 //
-// Returns all domain information
+// 给指定的用户授予角色
 //
-// get special domain share information
+// 给指定的用户授予角色
 //
 // ---
 // produces:
@@ -176,7 +167,7 @@ func (this userRolesController) Auth(ctx *context.Context) {
 	jclaim, err := hjwt.ParseJwt(cok.Value)
 	if err != nil {
 		logs.Error(err)
-		http.Redirect(ctx.ResponseWriter, ctx.Request, "/", http.StatusMovedPermanently)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter,403,i18n.Disconnect(ctx.Request))
 		return
 	}
 
@@ -186,7 +177,7 @@ func (this userRolesController) Auth(ctx *context.Context) {
 		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, msg, err)
 		return
 	}
-	hret.WriteHttpOkMsgs(ctx.ResponseWriter, "success")
+	hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Success(ctx.Request))
 }
 
 // swagger:operation POST /v1/auth/user/roles/revoke userRolesController userRolesController
@@ -219,7 +210,7 @@ func (this userRolesController) Auth(ctx *context.Context) {
 //   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this userRolesController) Revoke(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	if !hrpc.BasicAuth(ctx) {
@@ -233,7 +224,7 @@ func (this userRolesController) Revoke(ctx *context.Context) {
 	jclaim, err := hjwt.ParseJwt(cok.Value)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter,403,i18n.Disconnect())
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter,403,i18n.Disconnect(ctx.Request))
 		return
 	}
 
@@ -243,7 +234,7 @@ func (this userRolesController) Revoke(ctx *context.Context) {
 		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, msg, err)
 		return
 	} else {
-		hret.WriteHttpOkMsgs(ctx.ResponseWriter, "success")
+		hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Success(ctx.Request))
 		return
 	}
 }

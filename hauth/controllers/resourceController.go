@@ -9,15 +9,9 @@ import (
 	"github.com/hzwy23/asofdate/hauth/hrpc"
 	"github.com/hzwy23/asofdate/utils/hret"
 	"github.com/hzwy23/asofdate/utils/logs"
+	"github.com/hzwy23/asofdate/utils/i18n"
 )
 
-const (
-	error_resource_query       = "查询菜单资源信息失败，请重试"
-	error_resource_query_theme = "查询主题信息失败，请重试"
-	error_resource_exec        = "执行SQL，提交新增用户信息失败，请联系管理员"
-	error_resource_type        = "资源类型不符合要求"
-	error_resource_update      = "更新菜单资源名称失败"
-)
 
 type resourceController struct {
 	models *models.ResourceModel
@@ -27,13 +21,11 @@ var ResourceCtl = &resourceController{
 	new(models.ResourceModel),
 }
 
-// 菜单资源子页面路由
 // swagger:operation GET /v1/auth/resource/page StaticFiles domainShareControll
 //
-// Returns all domain information
+// 返回菜单资源管理页面
 //
-// get special domain share information
-//
+// 系统会对请求用户权限进行校验,校验通过,将会返回菜单管理配置页面.
 // ---
 // produces:
 // - application/json
@@ -41,12 +33,6 @@ var ResourceCtl = &resourceController{
 // - text/xml
 // - text/html
 // parameters:
-// - name: domain_id
-//   in: query
-//   description: domain code number
-//   required: true
-//   type: string
-//   format:
 // responses:
 //   '200':
 //     description: all domain information
@@ -58,7 +44,7 @@ func (resourceController) Page(ctx *context.Context) {
 
 	rst, err := hcache.GetStaticFile("AsofdateResourcePage")
 	if err != nil {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 404, "页面不存在")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 404, i18n.PageNotFound(ctx.Request))
 		return
 	}
 
@@ -67,9 +53,9 @@ func (resourceController) Page(ctx *context.Context) {
 
 // swagger:operation GET /v1/auth/resource/get resourceController getdomainShareControll
 //
-// Returns all domain information
+// 返回系统中所有的菜单资源信息
 //
-// get special domain share information
+// 系统会对用户权限进行校验,校验通过,将会返回菜单资源信息
 //
 // ---
 // produces:
@@ -86,7 +72,7 @@ func (resourceController) Page(ctx *context.Context) {
 //   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this resourceController) Get(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	if !hrpc.BasicAuth(ctx) {
@@ -95,7 +81,7 @@ func (this resourceController) Get(ctx *context.Context) {
 	rst, err := this.models.Get()
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, error_resource_query, err)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_resource_query"), err)
 		return
 	}
 	hret.WriteJson(ctx.ResponseWriter, rst)
@@ -103,10 +89,9 @@ func (this resourceController) Get(ctx *context.Context) {
 
 // swagger:operation GET /v1/auth/resource/query resourceController getdomainShareControll
 //
-// Returns all domain information
+// 查询指定菜单的详细信息
 //
-// get special domain share information
-//
+// 查询某个指定资源的详细信息
 // ---
 // produces:
 // - application/json
@@ -114,22 +99,22 @@ func (this resourceController) Get(ctx *context.Context) {
 // - text/xml
 // - text/html
 // parameters:
-// - name: domain_id
+// - name: res_id
 //   in: query
-//   description: domain code number
+//   description: resource code number
 //   required: true
 //   type: string
 //   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this resourceController) Query(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	res_id := ctx.Request.FormValue("res_id")
 	rst, err := this.models.Query(res_id)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, error_resource_query, err)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_resource_query"), err)
 		return
 	}
 	hret.WriteJson(ctx.ResponseWriter, rst)
@@ -138,10 +123,9 @@ func (this resourceController) Query(ctx *context.Context) {
 
 // swagger:operation POST /v1/auth/resource/post resourceController getdomainShareControll
 //
-// Returns all domain information
+// 新增菜单信息
 //
-// get special domain share information
-//
+// 向系统中新增菜单资源信息
 // ---
 // produces:
 // - application/json
@@ -149,15 +133,9 @@ func (this resourceController) Query(ctx *context.Context) {
 // - text/xml
 // - text/html
 // parameters:
-// - name: domain_id
-//   in: query
-//   description: domain code number
-//   required: true
-//   type: string
-//   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this resourceController) Post(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	if !hrpc.BasicAuth(ctx) {
@@ -185,19 +163,19 @@ func (this resourceController) Post(ctx *context.Context) {
 
 	if !govalidator.IsWord(res_id) {
 		logs.Error("资源编码必须由1,30位字母或数字组成")
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 333, "资源编码必须由1,30位字母或数字组成")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_resource_res_id"))
 		return
 	}
 
 	if govalidator.IsEmpty(res_name) {
 		logs.Error("菜单名称不能为空")
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 333, "菜单名称不能为空")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_resource_desc_empty"))
 		return
 	}
 
 	if govalidator.IsEmpty(res_type) {
 		logs.Error("菜单类别不能为空")
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 333, "菜单类别不能为空")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_resource_type"))
 		return
 	}
 
@@ -206,81 +184,81 @@ func (this resourceController) Post(ctx *context.Context) {
 		// 首页主菜单信息
 		if !govalidator.IsURI(res_url) {
 			logs.Error("菜单路由地址不能为空")
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 333, "菜单路由地址不能为空")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_resource_route_uri"))
 			return
 		}
 
 		if govalidator.IsEmpty(res_class) {
 			logs.Error("菜单样式类型不能为空")
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 333, "菜单样式类型不能为空")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_resource_class_style"))
 			return
 		}
 
 		if !govalidator.IsURI(res_img) {
 			logs.Error("菜单图标不能为空")
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 333, "菜单图标不能为空")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_resource_icon"))
 			return
 		}
 
 		if !govalidator.IsNumeric(group_id) {
 			logs.Error("菜单分组信息必须是数字")
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 333, "菜单分组信息必须是数字")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_resource_group"))
 			return
 		}
 
 		if !govalidator.IsNumeric(sort_id) {
 			logs.Error("菜单排序号必须是数字")
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 333, "菜单排序号必须是数字")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_resource_sort"))
 			return
 		}
 		err := this.models.Post(res_id, res_name, res_attr, res_up_id, res_type, theme_id, res_url, res_bg_color, res_class, group_id, res_img, sort_id)
 		if err != nil {
 			logs.Error(err)
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, error_resource_exec, err)
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_resource_exec"), err)
 			return
 		}
 	case "1":
 		// 子系统菜单信息
 		if !govalidator.IsURI(res_url) {
 			logs.Error("菜单路由地址不能为空")
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 333, "菜单路由地址不能为空")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_resource_route_uri"))
 			return
 		}
 
 		if !govalidator.IsWord(res_up_id) {
 			logs.Error("菜单上级编码不能为空")
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 333, "菜单上级编码不能为空")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_resource_up_id"))
 			return
 		}
 
 		if govalidator.IsEmpty(res_class) {
 			logs.Error("菜单样式类型不能为空")
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 333, "菜单样式类型不能为空")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_resource_class_style"))
 			return
 		}
 
 		if !govalidator.IsURI(res_img) {
 			logs.Error("菜单图标不能为空")
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 333, "菜单图标不能为空")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_resource_icon"))
 			return
 		}
 
 		if !govalidator.IsNumeric(group_id) {
 			logs.Error("菜单分组信息必须是数字")
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 333, "菜单分组信息必须是数字")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_resource_group"))
 			return
 		}
 
 		if !govalidator.IsNumeric(sort_id) {
 			logs.Error("菜单排序号必须是数字")
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 333, "菜单排序号必须是数字")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_resource_sort"))
 			return
 		}
 
 		err := this.models.Post(res_id, res_name, res_attr, res_up_id, res_type, theme_id, res_url, res_bg_color, res_class, group_id, res_img, sort_id)
 		if err != nil {
 			logs.Error(err)
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, error_resource_exec, err)
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_resource_exec"), err)
 			return
 		}
 
@@ -288,13 +266,13 @@ func (this resourceController) Post(ctx *context.Context) {
 		// 功能按钮信息
 		if !govalidator.IsWord(res_up_id) {
 			logs.Error("菜单上级编码不能为空")
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 333, "菜单上级编码不能为空")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_resource_up_id"))
 			return
 		}
 
 		if !govalidator.IsURI(res_url) {
 			logs.Error("菜单路由地址不能为空")
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 333, "菜单路由地址不能为空")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_resource_route_uri"))
 			return
 		}
 		sort_id = "0"
@@ -305,7 +283,7 @@ func (this resourceController) Post(ctx *context.Context) {
 		err := this.models.Post(res_id, res_name, res_attr, res_up_id, res_type, theme_id, res_url, res_bg_color, res_class, group_id, res_img, sort_id)
 		if err != nil {
 			logs.Error(err)
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, error_resource_exec, err)
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_resource_exec"), err)
 			return
 		}
 
@@ -314,31 +292,29 @@ func (this resourceController) Post(ctx *context.Context) {
 		// 功能按钮信息
 		if !govalidator.IsWord(res_up_id) {
 			logs.Error("菜单上级编码不能为空")
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 333, "菜单上级编码不能为空")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_resource_up_id"))
 			return
 		}
 
 		err := this.models.PostButton(res_id, res_name, res_attr, res_up_id, res_type)
 		if err != nil {
 			logs.Error(err)
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, error_resource_exec, err)
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_resource_exec"), err)
 			return
 		}
 	default:
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, error_resource_type)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_resource_type"))
 		return
 	}
 	hret.WriteHttpOkMsgs(ctx.ResponseWriter, "success")
 
 }
 
-
-// swagger:operation DELETE /v1/auth/resource/delete resourceController getdomainShareControll
+// swagger:operation POST /v1/auth/resource/delete resourceController getdomainShareControll
 //
-// Returns all domain information
+// 删除菜单信息
 //
-// get special domain share information
-//
+// 删除系统中的菜单资源信息,系统会对用户的权限进行校验,只有校验通过,才能删除菜单资源信息.
 // ---
 // produces:
 // - application/json
@@ -346,15 +322,15 @@ func (this resourceController) Post(ctx *context.Context) {
 // - text/xml
 // - text/html
 // parameters:
-// - name: domain_id
+// - name: res_id
 //   in: query
-//   description: domain code number
+//   description: resource code number
 //   required: true
 //   type: string
 //   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this resourceController) Delete(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	if !hrpc.BasicAuth(ctx) {
@@ -371,14 +347,14 @@ func (this resourceController) Delete(ctx *context.Context) {
 		return
 	}
 
-	hret.WriteHttpOkMsgs(ctx.ResponseWriter, "remove resource successfully.")
+	hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Success(ctx.Request))
 }
 
 // swagger:operation PUT /v1/auth/resource/update resourceController getdomainShareControll
 //
-// Returns all domain information
+// 更新菜单信息
 //
-// get special domain share information
+// API只支持修改菜单的名称
 //
 // ---
 // produces:
@@ -387,15 +363,21 @@ func (this resourceController) Delete(ctx *context.Context) {
 // - text/xml
 // - text/html
 // parameters:
-// - name: domain_id
+// - name: res_id
 //   in: query
-//   description: domain code number
+//   description: resource code number
+//   required: true
+//   type: string
+//   format:
+// - name: res_name
+//   in: query
+//   description: resource describe
 //   required: true
 //   type: string
 //   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this resourceController) Update(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	if !hrpc.BasicAuth(ctx) {
@@ -406,14 +388,14 @@ func (this resourceController) Update(ctx *context.Context) {
 	res_name := ctx.Request.FormValue("res_name")
 
 	if govalidator.IsEmpty(res_name) {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "资源描述不能为空.")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_resource_desc_empty"))
 		return
 	}
 
 	err := this.models.Update(res_id, res_name)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, error_resource_update, err)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_resource_update"), err)
 		return
 	}
 	hret.WriteHttpOkMsgs(ctx.ResponseWriter, "success")

@@ -16,9 +16,9 @@ var SwaggerCtl = &swaggerController{}
 
 // swagger:operation GET /v1/auth/swagger/page StaticFiles swaggerController
 //
-// Returns all domain information
+// API文档页面
 //
-// get special domain share information
+// 返回API信息
 //
 // ---
 // produces:
@@ -26,16 +26,9 @@ var SwaggerCtl = &swaggerController{}
 // - application/xml
 // - text/xml
 // - text/html
-// parameters:
-// - name: domain_id
-//   in: query
-//   description: domain code number
-//   required: true
-//   type: string
-//   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this swaggerController)Page(ctx *context.Context){
 	if !hrpc.BasicAuth(ctx) {
 		return
@@ -43,7 +36,7 @@ func (this swaggerController)Page(ctx *context.Context){
 
 	rst, err := hcache.GetStaticFile("SwaggerPage")
 	if err != nil {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 404, i18n.Get("as_of_date_page_not_exist"))
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 404, i18n.Get(ctx.Request,"as_of_date_page_not_exist"))
 		return
 	}
 

@@ -13,21 +13,9 @@ import (
 	"github.com/hzwy23/asofdate/utils/token/hjwt"
 	"github.com/asaskevich/govalidator"
 	"github.com/hzwy23/asofdate/hauth/hrpc"
+	"github.com/hzwy23/asofdate/utils/i18n"
 )
 
-const (
-	error_user_no_auth        = "没有权限访问这个域中的信息"
-	error_user_query          = "查询域中用户信息失败，请选择域后重新查询"
-	error_user_read_only      = "你对这个域拥有只读权限，无法在这个域中新增用户信息"
-	error_user_id_check       = "用户账号，必须有1-30位字母，数字组成"
-	error_user_name_check     = "用户名必须由1-30位汉字，字母，数字组成"
-	error_user_passwd_check   = "密码长度不能为空格，切长度不能小于6位"
-	error_user_passwd_encrypt = "对密码进行加密失败"
-	error_user_email_check    = "邮箱格式不正确"
-	error_user_phone_check    = "手机号格式不正确"
-	error_user_post           = "新增用户信息失败"
-	error_user_modify_passwd  = "您没有权限修改这个域中的用户信息"
-)
 
 type userController struct {
 	models *models.UserModel
@@ -37,12 +25,11 @@ var UserCtl = &userController{
 	new(models.UserModel),
 }
 
-// 获取用户管理子页面
 // swagger:operation GET /v1/auth/user/page StaticFiles userController
 //
-// Returns all domain information
+// 获取用户管理子页面
 //
-// get special domain share information
+// 返回用户管理页面
 //
 // ---
 // produces:
@@ -50,16 +37,9 @@ var UserCtl = &userController{
 // - application/xml
 // - text/xml
 // - text/html
-// parameters:
-// - name: domain_id
-//   in: query
-//   description: domain code number
-//   required: true
-//   type: string
-//   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (userController) Page(ctx *context.Context) {
 	defer hret.HttpPanic()
 
@@ -70,7 +50,7 @@ func (userController) Page(ctx *context.Context) {
 
 	rst, err := hcache.GetStaticFile("AsofdasteUserPage")
 	if err != nil {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 404, "页面不存在")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 404, i18n.PageNotFound(ctx.Request))
 		return
 	}
 
@@ -78,13 +58,11 @@ func (userController) Page(ctx *context.Context) {
 
 }
 
-// 获取指定域中用户信息
-// @(http request param) domain_id
 // swagger:operation GET /v1/auth/user/get userController userController
 //
-// Returns all domain information
+// 获取指定域中用户信息
 //
-// get special domain share information
+// 返回指定域中的用户信息
 //
 // ---
 // produces:
@@ -101,7 +79,7 @@ func (userController) Page(ctx *context.Context) {
 //   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this userController) Get(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	if !hrpc.BasicAuth(ctx) {
@@ -115,7 +93,7 @@ func (this userController) Get(ctx *context.Context) {
 	jclaim, err := hjwt.ParseJwt(cookie.Value)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 401, "No Auth")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect(ctx.Request))
 		return
 	}
 
@@ -125,8 +103,8 @@ func (this userController) Get(ctx *context.Context) {
 		domain_id = jclaim.Domain_id
 	}
 
-	if !hrpc.CheckDomain(ctx,domain_id,"r"){
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, error_user_no_auth)
+	if !hrpc.DomainAuth(ctx.Request,domain_id,"r"){
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Get(ctx.Request,"error_user_no_auth"))
 		return
 	}
 
@@ -134,7 +112,7 @@ func (this userController) Get(ctx *context.Context) {
 	rst, err := this.models.GetDefault(domain_id)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 410, error_user_query, err)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 410, i18n.Get(ctx.Request,"error_user_query"), err)
 		return
 	}
 	hret.WriteJson(ctx.ResponseWriter, rst)
@@ -142,9 +120,9 @@ func (this userController) Get(ctx *context.Context) {
 
 // swagger:operation POST /v1/auth/user/post userController userController
 //
-// Returns all domain information
+// 新增用户信息
 //
-// get special domain share information
+// 在某个域中新增用户信息
 //
 // ---
 // produces:
@@ -161,7 +139,7 @@ func (this userController) Get(ctx *context.Context) {
 //   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this userController) Post(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	if !hrpc.BasicAuth(ctx) {
@@ -176,53 +154,53 @@ func (this userController) Post(ctx *context.Context) {
 	jclaim, err := hjwt.ParseJwt(cookie.Value)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 401, "No Auth")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect(ctx.Request))
 		return
 	}
 
-	if !hrpc.CheckDomain(ctx,domain_id,"w"){
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, error_user_no_auth)
+	if !hrpc.DomainAuth(ctx.Request,domain_id,"w"){
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_user_no_auth"))
 		return
 	}
 
 
 	if !govalidator.IsWord(userId) {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, error_user_id_check)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_user_id_check"))
 		return
 	}
 	//
 
 	if govalidator.IsEmpty(userDesc) {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, error_user_name_check)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_user_name_check"))
 		return
 	}
 	//
 	password := ctx.Request.FormValue("userPasswd")
 	if govalidator.IsEmpty(password) {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, error_user_passwd_check)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_user_passwd_check"))
 		return
 	}
 
 	surepassword := ctx.Request.FormValue("userPasswdConfirm")
 	if govalidator.IsEmpty(surepassword) {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, "请确认密码.")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_passwd_empty"))
 		return
 	}
 
 	if password != surepassword{
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter,419,"两次输入密码不一致.")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter,419,i18n.Get(ctx.Request,"error_passwd_confirm_failed"))
 		return
 	}
 
 	if len(strings.TrimSpace(password)) < 6 {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,"密码长度不能小于6位.")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,i18n.Get(ctx.Request,"error_passwd_short"))
 		return
 	}
 
 	userPasswd, err := utils.Encrypt(ctx.Request.FormValue("userPasswd"))
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, error_user_passwd_encrypt, err)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_user_passwd_encrypt"), err)
 		return
 	}
 
@@ -233,35 +211,35 @@ func (this userController) Post(ctx *context.Context) {
 
 	//
 	if !govalidator.IsEmail(userEmail) {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, error_user_email_check)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_user_email_check"))
 		return
 	}
 
 	if !govalidator.IsWord(userOrgUnitId){
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,"请选择机构信息.")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,i18n.Get(ctx.Request,"error_user_role_org"))
 		return
 	}
 
 	//
 	if !govalidator.IsMobilePhone(userPhone) {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, error_user_phone_check)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_user_phone_check"))
 		return
 	}
 
 	err = this.models.Post(userId, userPasswd, userDesc, userStatus, jclaim.User_id, userEmail, userPhone, userOrgUnitId, domain_id)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, error_user_post, err)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_user_post"), err)
 		return
 	}
-	hret.WriteHttpOkMsgs(ctx.ResponseWriter, "success")
+	hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Success(ctx.Request))
 }
 
-// swagger:operation DELETE /v1/auth/user/delete userController userController
+// swagger:operation POST /v1/auth/user/delete userController userController
 //
-// Returns all domain information
+// 删除用户信息
 //
-// get special domain share information
+// 删除某个域中的用户信息
 //
 // ---
 // produces:
@@ -269,16 +247,9 @@ func (this userController) Post(ctx *context.Context) {
 // - application/xml
 // - text/xml
 // - text/html
-// parameters:
-// - name: domain_id
-//   in: query
-//   description: domain code number
-//   required: true
-//   type: string
-//   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this userController) Delete(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	if !hrpc.BasicAuth(ctx) {
@@ -291,7 +262,7 @@ func (this userController) Delete(ctx *context.Context) {
 	jclaim, err := hjwt.ParseJwt(cookie.Value)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, "No Auth")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect(ctx.Request))
 		return
 	}
 
@@ -301,14 +272,18 @@ func (this userController) Delete(ctx *context.Context) {
 		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, msg, err)
 		return
 	}
-	hret.WriteHttpOkMsgs(ctx.ResponseWriter, "success")
+	hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Success(ctx.Request))
 }
 
 // swagger:operation GET /v1/auth/user/search userController userController
 //
-// Returns all domain information
+// 搜索用户信息
 //
-// get special domain share information
+// 客户端发起请求时,必须带如下几个参数;
+//
+// org_id 机构编码
+// status_id 机构状态
+// domain_id 所属域
 //
 // ---
 // produces:
@@ -323,9 +298,21 @@ func (this userController) Delete(ctx *context.Context) {
 //   required: true
 //   type: string
 //   format:
+// - name: org_id
+//   in: query
+//   description: org code number
+//   required: true
+//   type: string
+//   format:
+// - name: status_id
+//   in: query
+//   description: status code number
+//   required: true
+//   type: string
+//   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this userController) Search(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	var org_id = ctx.Request.FormValue("org_id")
@@ -336,7 +323,7 @@ func (this userController) Search(ctx *context.Context) {
 		jclaim, err := hjwt.ParseJwt(cookie.Value)
 		if err != nil {
 			logs.Error(err)
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 401, "No Auth")
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect(ctx.Request))
 			return
 		}
 		domain_id = jclaim.Domain_id
@@ -345,18 +332,17 @@ func (this userController) Search(ctx *context.Context) {
 	rst, err := this.models.Search(org_id, status_id, domain_id)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, "查询用户信息失败", err)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_user_query"), err)
 		return
 	}
 	hret.WriteJson(ctx.ResponseWriter, rst)
 }
 
-// 修改用户信息
 // swagger:operation PUT /v1/auth/user/put userController userController
 //
-// Returns all domain information
+// 修改用户信息
 //
-// get special domain share information
+// 修改用户信息
 //
 // ---
 // produces:
@@ -373,7 +359,7 @@ func (this userController) Search(ctx *context.Context) {
 //   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this userController) Put(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	if !hrpc.BasicAuth(ctx) {
@@ -390,45 +376,45 @@ func (this userController) Put(ctx *context.Context) {
 	jclaim, err := hjwt.ParseJwt(cookie.Value)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, "No Auth")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect(ctx.Request))
 		return
 	}
 
 	did, err := hrpc.CheckDomainByUserId(user_id)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, "No Auth")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Get(ctx.Request,"error_user_get_domain"))
 		return
 	}
 
-	if !hrpc.CheckDomain(ctx,did,"w"){
+	if !hrpc.DomainAuth(ctx.Request,did,"w"){
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, error_user_modify_passwd)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Get(ctx.Request,"error_user_modify_passwd"))
 		return
 	}
 
 	if !govalidator.IsWord(user_id){
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,"用户账号不正确.")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,i18n.Get(ctx.Request,"error_user_id_empty"))
 		return
 	}
 
 	if govalidator.IsEmpty(user_name){
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,"用户名不能为空")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,i18n.Get(ctx.Request,"error_user_desc_empty"))
 		return
 	}
 
 	if !govalidator.IsEmail(email){
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,"邮箱格式不正确.")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,i18n.Get(ctx.Request,"error_user_email_format"))
 		return
 	}
 
 	if !govalidator.IsWord(org_id){
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,"请选择机构号")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,i18n.Get(ctx.Request,"error_org_id_format"))
 		return
 	}
 
 	if !govalidator.IsMobilePhone(phone){
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,"请填写手机号")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,i18n.Get(ctx.Request,"error_user_phone_format"))
 		return
 	}
 
@@ -438,15 +424,14 @@ func (this userController) Put(ctx *context.Context) {
 		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, msg, err)
 		return
 	}
-	hret.WriteHttpOkMsgs(ctx.ResponseWriter, "success")
+	hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Success(ctx.Request))
 }
 
-// 修改用户密码
 // swagger:operation PUT /v1/auth/user/modify/passwd userController userController
 //
-// Returns all domain information
+// 修改用户密码
 //
-// get special domain share information
+// 修改用户密码
 //
 // ---
 // produces:
@@ -463,7 +448,7 @@ func (this userController) Put(ctx *context.Context) {
 //   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this userController) ModifyPasswd(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	if !hrpc.BasicAuth(ctx) {
@@ -475,19 +460,19 @@ func (this userController) ModifyPasswd(ctx *context.Context) {
 	user_password := ctx.Request.FormValue("newpasswd")
 	confirm_password := ctx.Request.FormValue("surepasswd")
 	if user_password != confirm_password {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "两次输入密码不一致，请重新输入")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_passwd_confirm_failed"))
 		return
 	}
 
 	if len(strings.TrimSpace(confirm_password)) < 6 || len(strings.TrimSpace(confirm_password)) > 30 {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "密码长度必须是大于6位，且小于30位")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_passwd_short"))
 		return
 	}
 
 	did, err := hrpc.CheckDomainByUserId(user_id)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "修改用户密码失败", err)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_passwd_modify"), err)
 		return
 	}
 
@@ -495,7 +480,7 @@ func (this userController) ModifyPasswd(ctx *context.Context) {
 	jclaim, err := hjwt.ParseJwt(cookie.Value)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, "No Auth")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect(ctx.Request))
 		return
 	}
 
@@ -503,7 +488,7 @@ func (this userController) ModifyPasswd(ctx *context.Context) {
 		level := hrpc.CheckDomainRights(jclaim.User_id, did)
 		if level != 2 {
 			logs.Error(err)
-			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, error_user_modify_passwd)
+			hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_user_modify_passwd"))
 			return
 		}
 	}
@@ -511,7 +496,7 @@ func (this userController) ModifyPasswd(ctx *context.Context) {
 	encry_passwd, err := utils.Encrypt(user_password)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "用户密码加密失败")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_password_encrpty"))
 		return
 	}
 
@@ -521,16 +506,15 @@ func (this userController) ModifyPasswd(ctx *context.Context) {
 		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, msg, err)
 		return
 	}
-	hret.WriteHttpOkMsgs(ctx.ResponseWriter, "success")
+	hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Success(ctx.Request))
 
 }
 
-// 修改用户锁状态
 // swagger:operation PUT /v1/auth/user/modify/status userController userController
 //
-// Returns all domain information
+// 修改用户锁状态
 //
-// get special domain share information
+// 修改用户锁状态
 //
 // ---
 // produces:
@@ -547,7 +531,7 @@ func (this userController) ModifyPasswd(ctx *context.Context) {
 //   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this userController) ModifyStatus(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	if !hrpc.BasicAuth(ctx) {
@@ -560,7 +544,7 @@ func (this userController) ModifyStatus(ctx *context.Context) {
 	did, err := hrpc.CheckDomainByUserId(user_id)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "修改用户锁状态失败", err)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_user_modify_status"), err)
 		return
 	}
 
@@ -568,23 +552,23 @@ func (this userController) ModifyStatus(ctx *context.Context) {
 	jclaim, err := hjwt.ParseJwt(cookie.Value)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, "No Auth")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect(ctx.Request))
 		return
 	}
 
 	if jclaim.User_id == user_id {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, "禁止修改自身的用户状态")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Get(ctx.Request,"error_user_modify_yourself"))
 		return
 	}
 
-	if !hrpc.CheckDomain(ctx,did,"w"){
+	if !hrpc.DomainAuth(ctx.Request,did,"w"){
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 401, error_user_modify_passwd)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 401, i18n.Get(ctx.Request,"error_user_modify_passwd"))
 		return
 	}
 
 	if !govalidator.IsIn(status_id,"0","1"){
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,"请选择用户状态.")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter,421,i18n.Get(ctx.Request,"error_user_status_empty"))
 		return
 	}
 
@@ -594,15 +578,14 @@ func (this userController) ModifyStatus(ctx *context.Context) {
 		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, msg, err)
 		return
 	}
-	hret.WriteHttpOkMsgs(ctx.ResponseWriter, "success")
+	hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Success(ctx.Request))
 }
 
-// 查询用户自身信息
 // swagger:operation GET /v1/auth/user/query userController userController
 //
-// Returns all domain information
+// 查询用户自身信息
 //
-// get special domain share information
+// 查询用户自身信息
 //
 // ---
 // produces:
@@ -619,20 +602,20 @@ func (this userController) ModifyStatus(ctx *context.Context) {
 //   format:
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
 func (this userController) GetUserDetails(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	cookie, _ := ctx.Request.Cookie("Authorization")
 	jclaim, err := hjwt.ParseJwt(cookie.Value)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 401, "No Auth")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 401, i18n.Disconnect(ctx.Request))
 		return
 	}
 	rst, err := this.models.GetOwnerDetails(jclaim.User_id)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, "查询用户信息失败")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"error_user_query"))
 		return
 	}
 	hret.WriteJson(ctx.ResponseWriter, rst)

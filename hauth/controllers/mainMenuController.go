@@ -41,6 +41,7 @@ var homePageMenusModel = new(models.HomePageMenusModel)
 //     description: page not found
 func SubSystemEntry(ctx *context.Context) {
 	defer hret.HttpPanic()
+
 	ctx.Request.ParseForm()
 	id := ctx.Request.FormValue("Id")
 
@@ -49,7 +50,7 @@ func SubSystemEntry(ctx *context.Context) {
 	jclaim, err := hjwt.ParseJwt(cookie.Value)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect())
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect(ctx.Request))
 		return
 	}
 
@@ -63,7 +64,7 @@ func SubSystemEntry(ctx *context.Context) {
 	tpl,err := hcache.GetStaticFile(id)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter,404,i18n.PageNotFonud())
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter,404,i18n.PageNotFound(ctx.Request))
 		return
 	}
 	ctx.ResponseWriter.Write(tpl)
@@ -112,14 +113,14 @@ func HomePageMenus(ctx *context.Context) {
 	jclaim, err := hjwt.ParseJwt(cookie.Value)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect())
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect(ctx.Request))
 		return
 	}
 
 	ojs, err := homePageMenusModel.Get(Id, typeId, jclaim.User_id)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, "please contact sysadmin.query main menu failed.")
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"error_query_menu"))
 		return
 	}
 	ctx.ResponseWriter.Write(ojs)

@@ -50,21 +50,22 @@ func (this *domainController) Page(ctx *context.Context) {
 
 	rst, err := hcache.GetStaticFile("DomainPage")
 	if err != nil {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 404, i18n.Get("as_of_date_page_not_exist"))
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 404, i18n.Get(ctx.Request,"as_of_date_page_not_exist"))
 		return
 	}
 
 	ctx.ResponseWriter.Write(rst)
 }
 
-// 查询域信息
-// Page return domain info
-//
+
 // swagger:operation GET /v1/auth/domain/get domainController getDomainInfo
 //
-// Returns all domain information
+// If the request is successful, will return domain information that the user be able to access.
 //
+// The system will check user permissions.
+// So,you must first login system,and then you can send the request.
 //
+// You must pass in two arguments, first is offset ,second is limit.
 //
 // ---
 // produces:
@@ -76,18 +77,22 @@ func (this *domainController) Page(ctx *context.Context) {
 // - name: offset
 //   in: query
 //   description: start row number
-//   required: false
+//   required: true
 //   type: integer
 //   format: int32
 // - name: limit
 //   in: query
 //   description: maximum number of results to return
-//   required: false
+//   required: true
 //   type: integer
 //   format: int32
 // responses:
 //   '200':
-//     description: all domain information
+//     description: success
+//   '403':
+//     description: Insufficient permissions
+//   '421':
+//     description: get domain information failed.
 func (this *domainController) Get(ctx *context.Context) {
 
 	ctx.Request.ParseForm()
@@ -102,24 +107,19 @@ func (this *domainController) Get(ctx *context.Context) {
 	rst, total, err := this.models.GetAll(offset, limit)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 312, i18n.Get("as_of_date_domain_query"))
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"as_of_date_domain_query"))
 		return
 	}
 
 	hret.WriteBootstrapTableJson(ctx.ResponseWriter, total, rst)
 }
 
-// 新增域信息
-// http请求参数
-// domainId     域编码,必须由数字,字母组成
-// domainDesc   域名称,不能为空
-// domainStatus 域状态,必须是0或者1中的一个
-//
 // swagger:operation POST /v1/auth/domain/post domainController postDomainInfo
 //
-// Returns all domain information
+// Add domain information
 //
-//
+// The system will check user permissions.
+// So,you must first login system,and then you can send the request.
 //
 // ---
 // produces:
@@ -152,55 +152,62 @@ func (this *domainController) Get(ctx *context.Context) {
 func (this *domainController) Post(ctx *context.Context) {
 	ctx.Request.ParseForm()
 
+	// Check user permissions
 	if !hrpc.BasicAuth(ctx) {
 		return
 	}
 
+	// Get the form data
 	domainId := ctx.Request.FormValue("domainId")
 	domainDesc := ctx.Request.FormValue("domainDesc")
 	domainStatus := ctx.Request.FormValue("domainStatus")
-	//校验
+
+	// validator domain id format
 	if !govalidator.IsWord(domainId) {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get("as_of_date_domain_id_check"))
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"as_of_date_domain_id_check"))
 		return
 	}
 
-	//
-	if !govalidator.IsIn(domainStatus, "0", "1") {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get("as_of_date_domain_status_check"))
-		return
-	}
-
+	// validator domain describe format. It does not allow null values
 	if govalidator.IsEmpty(domainDesc) {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get("as_of_date_domain_isempty"))
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"as_of_date_domain_isempty"))
 		return
 	}
 
+	// validator domain status format
+	// It must be in the 0 and 1
+	if !govalidator.IsIn(domainStatus, "0", "1") {
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"as_of_date_domain_status_check"))
+		return
+	}
+
+	// get user connection information from cookie
 	cookie, _ := ctx.Request.Cookie("Authorization")
 	jclaim, err := hjwt.ParseJwt(cookie.Value)
 	if err != nil {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect())
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect(ctx.Request))
 		return
 	}
 
+	// submit new domain info to user model
+	// If success, will return nil, or not.
 	err = this.models.Post(domainId, domainDesc, domainStatus, jclaim.User_id, jclaim.Domain_id)
-
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get("as_of_date_domain_add_failed"), err)
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"as_of_date_domain_add_failed"), err)
 		return
 	}
 
-	hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Get("success"))
+	// return success
+	hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Get(ctx.Request,"success"))
 }
 
-// 删除域信息
+// swagger:operation POST /v1/auth/domain/delete domainController deleteDomainInfo
 //
-// swagger:operation DELETE /v1/auth/domain/delete domainController deleteDomainInfo
+// Delete domain information.
 //
-// Returns all domain information
-//
-//
+// The system will check user permissions.
+// So,you must first login system,and then you can send the request.
 //
 // ---
 // produces:
@@ -209,9 +216,15 @@ func (this *domainController) Post(ctx *context.Context) {
 // - text/xml
 // - text/html
 // parameters:
+// - name: _method
+//   in: query
+//   description: DELETE
+//   required: true
+//   type: string
+//   format:
 // - name: JSON
 //   in: query
-//   description: domain info, for example is ,[{domain_id}]
+//   description: domain info, for example is ,[{Project_id\:value}]
 //   required: true
 //   type: string
 //   format:
@@ -229,7 +242,7 @@ func (this *domainController) Delete(ctx *context.Context) {
 	err := json.Unmarshal(ijs, &js)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get("as_of_date_domain_delete"))
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"as_of_date_domain_delete"))
 		return
 	}
 
@@ -237,7 +250,7 @@ func (this *domainController) Delete(ctx *context.Context) {
 	jclaim, err := hjwt.ParseJwt(cookie.Value)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Get("as_of_date_disconnect"))
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Get(ctx.Request,"as_of_date_disconnect"))
 		return
 	}
 
@@ -247,13 +260,12 @@ func (this *domainController) Delete(ctx *context.Context) {
 		return
 	}
 
-	hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Get("success"))
+	hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Get(ctx.Request,"success"))
 }
 
-// 更新域信息
 // swagger:operation PUT /v1/auth/domain/update domainController putDomainInfo
 //
-// API Describe: update domain describe, domain status
+// update domain describe and domain status
 //
 // update domain info , you neet input three arguments, domainId,domainDesc,domainStatus. column domain_id can't update.
 //
@@ -285,7 +297,11 @@ func (this *domainController) Delete(ctx *context.Context) {
 // responses:
 //   '200':
 //     description: success
-func (this *domainController) Update(ctx *context.Context) {
+//   '403':
+//     description: Insufficient permissions
+//   '421':
+//     description: Post domain information failed.
+func (this *domainController) Put(ctx *context.Context) {
 	ctx.Request.ParseForm()
 
 	if !hrpc.BasicAuth(ctx) {
@@ -298,13 +314,13 @@ func (this *domainController) Update(ctx *context.Context) {
 
 	// 校验域名称,不能为空
 	if govalidator.IsEmpty(domainDesc) {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get("as_of_date_domain_isempty"))
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"as_of_date_domain_isempty"))
 		return
 	}
 
 	// 校验域状态编码,必须是0或者1
 	if !govalidator.IsIn(domainStatus, "0", "1") {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get("as_of_date_domain_status_check"))
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"as_of_date_domain_status_check"))
 		return
 	}
 
@@ -312,32 +328,30 @@ func (this *domainController) Update(ctx *context.Context) {
 	jclaim, err := hjwt.ParseJwt(cookie.Value)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect())
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect(ctx.Request))
 		return
 	}
 
-	if !hrpc.CheckDomain(ctx, domainId, "w") {
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Get("as_of_date_domain_permission_denied_modify"))
+	if !hrpc.DomainAuth(ctx.Request, domainId, "w") {
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Get(ctx.Request,"as_of_date_domain_permission_denied_modify"))
 		return
 	}
 
 	err = this.models.Update(domainDesc, domainStatus, jclaim.User_id, domainId)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get("as_of_date_domain_update"))
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 421, i18n.Get(ctx.Request,"as_of_date_domain_update"))
 		return
 	}
 
-	hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Get("success"))
+	hret.WriteHttpOkMsgs(ctx.ResponseWriter, i18n.Get(ctx.Request,"success"))
 }
 
-
-// 获取指定域详细信息
 // swagger:operation GET /v1/auth/domain/row/details domainController getDomainDetailsInfo
 //
-// Returns all domain information
+// 返回指定域的详细信息.
 //
-//
+// 根据客户端请求参数domain_id,返回这个域的详细信息.
 //
 // ---
 // produces:
@@ -355,6 +369,8 @@ func (this *domainController) Update(ctx *context.Context) {
 // responses:
 //   '200':
 //     description: success
+//   '419':
+//     description: get domain detailes failed.
 func (this *domainController) GetDetails(ctx *context.Context) {
 	ctx.Request.ParseForm()
 	var domain_id = ctx.Request.FormValue("domain_id")
@@ -362,18 +378,17 @@ func (this *domainController) GetDetails(ctx *context.Context) {
 	rst, err := this.models.GetRow(domain_id)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get("as_of_date_domain_details"))
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 419, i18n.Get(ctx.Request,"as_of_date_domain_details"))
 		return
 	}
 	hret.WriteJson(ctx.ResponseWriter, rst)
 }
 
-// 获取用户自己所属域的编码
 // swagger:operation GET /v1/auth/domain/id domainController getDomainId
 //
-// Returns all domain information
+// 返回用户所属域ID号
 //
-//
+// 查询用户登录信息, 根据用户信息,返回用户所属域.
 //
 // ---
 // produces:
@@ -384,6 +399,8 @@ func (this *domainController) GetDetails(ctx *context.Context) {
 // responses:
 //   '200':
 //     description: success
+//   '403':
+//     description: Insufficient permissions
 func (this *domainController) GetId(ctx *context.Context) {
 	ctx.Request.ParseForm()
 
@@ -391,7 +408,7 @@ func (this *domainController) GetId(ctx *context.Context) {
 	jclaim, err := hjwt.ParseJwt(cookie.Value)
 	if err != nil {
 		logs.Error(err)
-		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect())
+		hret.WriteHttpErrMsgs(ctx.ResponseWriter, 403, i18n.Disconnect(ctx.Request))
 		return
 	}
 
